@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pandas
+numpy
+scikit-learn
+python-multipart
+pydantic
+requests
+sqlalchemy
+alembic
+psycopg2-binary
+pytest              

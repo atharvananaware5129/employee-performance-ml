@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Performance Dashboard</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ---------- General ---------- */
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+    color: #333;
+}
+h1 {
+    text-align: center;
+    margin: 20px 0;
+    color: #34495e;
+}
+.container {
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 10px;
+}
+
+/* ---------- Cards ---------- */
+.card {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    transition: transform 0.3s;
+}
+.card:hover {
+    transform: translateY(-5px);
+}
+.card h2 {
+    margin-top: 0;
+    display: flex;
+    align-items: center;
+    font-size: 22px;
+    color: #2c3e50;
+}
+.card h2 i {
+    margin-right: 10px;
+    color: #ff7e5f;
+}
+
+/* ---------- Forms ---------- */
+form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+form input, form select, form button {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+form button {
+    grid-column: span 2;
+    background: linear-gradient(90deg, #ff7e5f, #feb47b);
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+form button:hover {
+    background: linear-gradient(90deg, #feb47b, #ff7e5f);
+}
+
+/* ---------- Result Box ---------- */
+.result-box {
+    padding: 15px;
+    margin-top: 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    text-align: center;
+    background: #ecf0f1;
+    transition: 0.3s;
+}
+
+/* ---------- Progress Bars ---------- */
+.progress-container {
+    margin-top: 10px;
+}
+.progress-bar {
+    background: #dfe6e9;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+.progress-bar div {
+    height: 20px;
+    background: #ff7e5f;
+    width: 0%;
+    color: white;
+    text-align: center;
+    font-size: 12px;
+    line-height: 20px;
+    transition: width 1s;
+}
+
+/* ---------- Prediction Table ---------- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+table, th, td { border: 1px solid #ccc; }
+th {
+    background: #ff7e5f;
+    color: white;
+}
+td { text-align: center; padding: 6px; }
+tbody tr:nth-child(even) { background: #f8f8f8; }
+
+/* ---------- Tooltip Guidance ---------- */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+}
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 180px;
+    background-color: #333;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%; left: 50%;
+    margin-left: -90px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+}
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+    form { grid-template-columns: 1fr; }
+    form button { grid-column: span 1; }
+}
+</style>
+
+<!-- ---------- FontAwesome for Icons ---------- -->
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<h1>Employee Performance ML Dashboard</h1>
+
+<div class="container">
+
+<!-- ---------------- TRAIN ---------------- -->
+<div class="card">
+    <h2><i class="fas fa-database"></i> Train Model</h2>
+    <form id="trainForm">
+        <input type="file" id="trainFile" required>
+        <input type="text" id="targetCol" placeholder="Target Column (optional)">
+        <button type="submit">Train Model</button>
+    </form>
+    <div id="trainResult" class="result-box"></div>
+</div>
+
+<!-- ---------------- TEST ---------------- -->
+<div class="card">
+    <h2><i class="fas fa-vials"></i> Test Model</h2>
+    <form id="testForm">
+        <input type="file" id="testFile" required>
+        <button type="submit">Test Model</button>
+    </form>
+    <div class="result-box" id="testResult"></div>
+    <div class="progress-container" id="progressBars"></div>
+</div>
+
+<!-- ---------------- PREDICT ---------------- -->
+<div class="card">
+    <h2><i class="fas fa-user-check"></i> Predict Single Employee</h2>
+    <form id="predictForm">
+        <div class="tooltip"><input type="text" id="department" placeholder="Department" required>
+            <span class="tooltiptext">Example: Sales, HR, IT</span></div>
+        <div class="tooltip"><input type="text" id="region" placeholder="Region" required>
+            <span class="tooltiptext">Example: East, West</span></div>
+        <div class="tooltip"><input type="text" id="education" placeholder="Education" required>
+            <span class="tooltiptext">Example: Bachelor, Master</span></div>
+        <div class="tooltip"><input type="text" id="gender" placeholder="Gender" required>
+            <span class="tooltiptext">Example: Male, Female</span></div>
+        <div class="tooltip"><input type="text" id="recruitment_channel" placeholder="Recruitment Channel" required>
+            <span class="tooltiptext">Example: Referral, HR</span></div>
+        <div class="tooltip"><input type="number" id="no_of_trainings" placeholder="No of Trainings" required>
+            <span class="tooltiptext">Example: 0, 2, 5</span></div>
+        <div class="tooltip"><input type="number" id="age" placeholder="Age" required>
+            <span class="tooltiptext">Example: 25, 30, 40</span></div>
+        <div class="tooltip"><input type="number" id="previous_year_rating" placeholder="Previous Year Rating" required>
+            <span class="tooltiptext">Example: 3, 4, 5</span></div>
+        <div class="tooltip"><input type="number" id="length_of_service" placeholder="Length of Service" required>
+            <span class="tooltiptext">In years. Example: 1, 5, 10</span></div>
+        <div class="tooltip"><input type="number" id="KPIs_met_more_than_80" placeholder="KPIs met >80%" required>
+            <span class="tooltiptext">0 = No, 1 = Yes</span></div>
+        <div class="tooltip"><input type="number" id="awards_won" placeholder="Awards Won" required>
+            <span class="tooltiptext">Example: 0, 2, 5</span></div>
+        <div class="tooltip"><input type="number" step="0.1" id="avg_training_score" placeholder="Average Training Score" required>
+            <span class="tooltiptext">Example: 75.0, 80.5</span></div>
+        <button type="submit">Predict</button>
+    </form>
+    <div id="predictResult" class="result-box"></div>
+
+    <table id="predictionTable">
+        <thead>
+            <tr>
+                <th>Department</th>
+                <th>Region</th>
+                <th>Education</th>
+                <th>Gender</th>
+                <th>Recruitment Channel</th>
+                <th>No of Trainings</th>
+                <th>Age</th>
+                <th>Prev Year Rating</th>
+                <th>Length of Service</th>
+                <th>KPIs > 80%</th>
+                <th>Awards Won</th>
+                <th>Avg Training Score</th>
+                <th>Prediction</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+const BASE_URL = "http://127.0.0.1:8000";
+
+// ---------- TRAIN ----------
+document.getElementById("trainForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const file = document.getElementById("trainFile").files[0];
+    const targetCol = document.getElementById("targetCol").value;
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("target_col", targetCol);
+    const resultBox = document.getElementById("trainResult");
+    resultBox.innerText = "Training...";
+    try {
+        const res = await fetch(BASE_URL+"/train",{method:"POST",body:formData});
+        const data = await res.json();
+        resultBox.innerText = data.message || JSON.stringify(data);
+    } catch(err){ resultBox.innerText = "Error: "+err; }
+});
+
+// ---------- TEST ----------
+document.getElementById("testForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const file = document.getElementById("testFile").files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    const resultBox = document.getElementById("testResult");
+    const progressContainer = document.getElementById("progressBars");
+    resultBox.innerText = "Testing...";
+    progressContainer.innerHTML = "";
+    try {
+        const res = await fetch(BASE_URL+"/test",{method:"POST",body:formData});
+        const data = await res.json();
+        resultBox.innerText = "";
+        ["accuracy","precision","recall","f1_score"].forEach(key=>{
+            const bar = document.createElement("div");
+            bar.className="progress-bar";
+            bar.innerHTML=`<div style="width:0%">${key}: 0%</div>`;
+            progressContainer.appendChild(bar);
+            setTimeout(()=>{ bar.firstChild.style.width=(data[key]*100)+"%"; bar.firstChild.innerText=`${key}: ${(data[key]*100).toFixed(1)}%`; },100);
+        });
+    } catch(err){ resultBox.innerText = "Error: "+err; }
+});
+
+// ---------- PREDICT ----------
+document.getElementById("predictForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const data = {
+        department: document.getElementById("department").value,
+        region: document.getElementById("region").value,
+        education: document.getElementById("education").value,
+        gender: document.getElementById("gender").value,
+        recruitment_channel: document.getElementById("recruitment_channel").value,
+        no_of_trainings: parseInt(document.getElementById("no_of_trainings").value),
+        age: parseInt(document.getElementById("age").value),
+        previous_year_rating: parseInt(document.getElementById("previous_year_rating").value),
+        length_of_service: parseInt(document.getElementById("length_of_service").value),
+        KPIs_met_more_than_80: parseInt(document.getElementById("KPIs_met_more_than_80").value),
+        awards_won: parseInt(document.getElementById("awards_won").value),
+        avg_training_score: parseFloat(document.getElementById("avg_training_score").value)
+    };
+    const resultBox = document.getElementById("predictResult");
+    resultBox.innerText = "Predicting...";
+    try {
+        const res = await fetch(BASE_URL+"/predict_single",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(data)
+        });
+        const result = await res.json();
+        resultBox.innerText = "Prediction: "+result.prediction;
+
+        // Add to table
+        const tbody = document.querySelector("#predictionTable tbody");
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${data.department}</td>
+            <td>${data.region}</td>
+            <td>${data.education}</td>
+            <td>${data.gender}</td>
+            <td>${data.recruitment_channel}</td>
+            <td>${data.no_of_trainings}</td>
+            <td>${data.age}</td>
+            <td>${data.previous_year_rating}</td>
+            <td>${data.length_of_service}</td>
+            <td>${data.KPIs_met_more_than_80}</td>
+            <td>${data.awards_won}</td>
+            <td>${data.avg_training_score}</td>
+            <td>${result.prediction}</td>
+        `;
+        tbody.appendChild(row);
+
+    } catch(err){ resultBox.innerText = "Error: "+err; }
+});
+</script>
+
+</body>
+</html>
