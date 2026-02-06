@@ -4,6 +4,7 @@
 
 from fastapi import FastAPI, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import pandas as pd
 import numpy as np
@@ -11,6 +12,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import pickle
+import os
 
 # ----------------------------
 # App Setup
@@ -18,11 +20,11 @@ import pickle
 
 app = FastAPI(
     title="Employee Performance ML API",
-    version="0.1.6",
-    description="Train and test ML model for employee promotion prediction. "
-                "Supports CSV-based train/test and manual single employee prediction."
+    version="0.1.7",
+    description="Train/test ML model and predict single employee performance."
 )
 
+# Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,13 +32,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ----------------------------
+# Mount frontend folder
+# ----------------------------
+frontend_path = os.path.join(os.path.dirname(__file__), "../frontend")
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+else:
+    print("Warning: Frontend folder not found. '/' route will 404.")
+
+# ----------------------------
 # Global encoders storage
+# ----------------------------
 encoders = {}
 
 # ----------------------------
 # Pydantic model for single employee input
 # ----------------------------
-
 class Employee(BaseModel):
     department: str = Field(..., example="Sales", description="Department of the employee")
     region: str = Field(..., example="Region_1", description="Region where employee works")
@@ -81,14 +93,13 @@ def clean_data(df: pd.DataFrame, encoders=None, fit_encoders=True):
         else:
             le = encoders.get(col)
             if le:
-                # Handle unseen labels by mapping to -1
+                # Handle unseen labels
                 df[col] = df[col].map(lambda x: le.transform([x])[0] if x in le.classes_ else -1)
     return df, encoders
 
 # ----------------------------
 # Train Endpoint
 # ----------------------------
-
 @app.post("/train", summary="Train ML Model")
 async def train_model(file: UploadFile, target_col: str = Form(None)):
     try:
@@ -107,7 +118,6 @@ async def train_model(file: UploadFile, target_col: str = Form(None)):
     elif target_col not in df.columns:
         raise HTTPException(status_code=400, detail=f"Specified target column '{target_col}' not found in CSV.")
 
-    # Clean data
     df, global_encoders = clean_data(df, encoders=encoders, fit_encoders=True)
 
     # Drop unnecessary columns
@@ -133,7 +143,6 @@ async def train_model(file: UploadFile, target_col: str = Form(None)):
 # ----------------------------
 # Test Endpoint
 # ----------------------------
-
 @app.post("/test", summary="Test ML Model")
 async def test_model(file: UploadFile):
     try:
@@ -143,7 +152,6 @@ async def test_model(file: UploadFile):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read CSV: {e}")
 
-    # Load model
     try:
         with open("model.pkl", "rb") as f:
             data = pickle.load(f)
@@ -154,13 +162,12 @@ async def test_model(file: UploadFile):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to load trained model: {e}")
 
-    # Auto-create target if missing
     if target_col not in df.columns:
         df[target_col] = np.random.randint(0, 2, size=len(df))
 
     df, _ = clean_data(df, encoders=encoders, fit_encoders=False)
 
-    # Drop extra columns
+    # Drop extra columns and align
     df = df[[col for col in df.columns if col in feature_columns + [target_col]]]
     X = df[feature_columns]
     y_true = df[target_col]
@@ -178,7 +185,6 @@ async def test_model(file: UploadFile):
 # ----------------------------
 # Predict Single Employee Endpoint
 # ----------------------------
-
 @app.post("/predict_single", summary="Predict for single employee")
 async def predict_single(employee: Employee):
     try:
@@ -198,8 +204,8 @@ async def predict_single(employee: Employee):
     # Ensure all features exist and order matches training
     for col in feature_columns:
         if col not in df.columns:
-            df[col] = 0  # fill missing
-    df = df[feature_columns]  # reorder
+            df[col] = 0
+    df = df[feature_columns]
 
     prediction = model.predict(df)
     return {"prediction": int(prediction[0])}
