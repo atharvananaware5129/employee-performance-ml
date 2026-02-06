@@ -1,10 +1,9 @@
 # backend/main.py
 
-# backend/main.py
-
 from fastapi import FastAPI, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 import pandas as pd
 import numpy as np
@@ -17,10 +16,9 @@ import os
 # ----------------------------
 # App Setup
 # ----------------------------
-
 app = FastAPI(
     title="Employee Performance ML API",
-    version="0.1.7",
+    version="0.1.8",
     description="Train/test ML model and predict single employee performance."
 )
 
@@ -40,6 +38,13 @@ if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 else:
     print("Warning: Frontend folder not found. '/' route will 404.")
+
+# Serve favicon.ico to avoid 404 in browser
+favicon_path = os.path.join(frontend_path, "favicon.ico")
+if os.path.exists(favicon_path):
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        return FileResponse(favicon_path)
 
 # ----------------------------
 # Global encoders storage
@@ -66,7 +71,6 @@ class Employee(BaseModel):
 # ----------------------------
 # Helper functions
 # ----------------------------
-
 def detect_target_column(df: pd.DataFrame):
     for col in df.columns:
         if 'promot' in col.lower() or 'target' in col.lower():

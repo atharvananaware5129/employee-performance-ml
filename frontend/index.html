@@ -245,7 +245,8 @@ tbody tr:nth-child(even) { background: #f8f8f8; }
 </div>
 
 <script>
-const BASE_URL = "http://127.0.0.1:8000";
+// Dynamically set API URL (works on Render deployment)
+const BASE_URL = window.location.origin;
 
 // ---------- TRAIN ----------
 document.getElementById("trainForm").addEventListener("submit", async (e)=>{
@@ -283,7 +284,10 @@ document.getElementById("testForm").addEventListener("submit", async (e)=>{
             bar.className="progress-bar";
             bar.innerHTML=`<div style="width:0%">${key}: 0%</div>`;
             progressContainer.appendChild(bar);
-            setTimeout(()=>{ bar.firstChild.style.width=(data[key]*100)+"%"; bar.firstChild.innerText=`${key}: ${(data[key]*100).toFixed(1)}%`; },100);
+            setTimeout(()=>{ 
+                bar.firstChild.style.width=(data[key]*100)+"%"; 
+                bar.firstChild.innerText=`${key}: ${(data[key]*100).toFixed(1)}%`; 
+            },100);
         });
     } catch(err){ resultBox.innerText = "Error: "+err; }
 });
@@ -342,3 +346,4 @@ document.getElementById("predictForm").addEventListener("submit", async (e)=>{
 
 </body>
 </html>
+
