@@ -18,7 +18,7 @@ import os
 # ----------------------------
 app = FastAPI(
     title="Employee Performance ML API",
-    version="0.1.8",
+    version="0.1.9",
     description="Train/test ML model and predict single employee performance."
 )
 
@@ -31,15 +31,21 @@ app.add_middleware(
 )
 
 # ----------------------------
-# Mount frontend folder
+# Frontend setup
 # ----------------------------
 frontend_path = os.path.join(os.path.dirname(__file__), "../frontend")
-if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-else:
+if not os.path.exists(frontend_path):
     print("Warning: Frontend folder not found. '/' route will 404.")
+else:
+    # Serve index.html at root
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return FileResponse(os.path.join(frontend_path, "index.html"))
 
-# Serve favicon.ico to avoid 404 in browser
+    # Serve all other frontend files (JS/CSS/images)
+    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+
+# Serve favicon.ico if exists
 favicon_path = os.path.join(frontend_path, "favicon.ico")
 if os.path.exists(favicon_path):
     @app.get("/favicon.ico", include_in_schema=False)
@@ -55,18 +61,18 @@ encoders = {}
 # Pydantic model for single employee input
 # ----------------------------
 class Employee(BaseModel):
-    department: str = Field(..., example="Sales", description="Department of the employee")
-    region: str = Field(..., example="Region_1", description="Region where employee works")
-    education: str = Field(..., example="Bachelor's", description="Education level of employee")
-    gender: str = Field(..., example="Male", description="Gender of employee")
-    recruitment_channel: str = Field(..., example="sourcing", description="Recruitment channel")
-    no_of_trainings: int = Field(..., example=3, description="Number of trainings completed by employee")
-    age: int = Field(..., example=29, description="Age of employee")
-    previous_year_rating: int = Field(..., example=4, description="Previous year performance rating")
-    length_of_service: int = Field(..., example=5, description="Number of years employee has served")
-    KPIs_met_more_than_80: int = Field(..., example=1, description="1 if KPIs met > 80%, else 0")
-    awards_won: int = Field(..., example=0, description="Number of awards won")
-    avg_training_score: float = Field(..., example=78.5, description="Average training score")
+    department: str
+    region: str
+    education: str
+    gender: str
+    recruitment_channel: str
+    no_of_trainings: int
+    age: int
+    previous_year_rating: int
+    length_of_service: int
+    KPIs_met_more_than_80: int
+    awards_won: int
+    avg_training_score: float
 
 # ----------------------------
 # Helper functions
@@ -97,7 +103,6 @@ def clean_data(df: pd.DataFrame, encoders=None, fit_encoders=True):
         else:
             le = encoders.get(col)
             if le:
-                # Handle unseen labels
                 df[col] = df[col].map(lambda x: le.transform([x])[0] if x in le.classes_ else -1)
     return df, encoders
 
@@ -113,27 +118,23 @@ async def train_model(file: UploadFile, target_col: str = Form(None)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read CSV: {e}")
 
-    # Detect or create target column
-    if target_col is None or target_col.strip() == "":
-        target_col = detect_target_column(df)
-        if target_col is None:
-            target_col = "is_promoted"
+    if not target_col:
+        target_col = detect_target_column(df) or "is_promoted"
+        if target_col not in df.columns:
             df[target_col] = np.random.randint(0, 2, size=len(df))
     elif target_col not in df.columns:
-        raise HTTPException(status_code=400, detail=f"Specified target column '{target_col}' not found in CSV.")
+        raise HTTPException(status_code=400, detail=f"Target column '{target_col}' not found in CSV")
 
     df, global_encoders = clean_data(df, encoders=encoders, fit_encoders=True)
 
-    # Drop unnecessary columns
     drop_columns = ["employee_id"]
     X = df.drop(columns=[target_col] + [col for col in drop_columns if col in df.columns])
     y = df[target_col]
 
-    # Train model
     model = LogisticRegression(max_iter=1000)
     model.fit(X, y)
 
-    # Save model, encoders, and feature names
+    # Save model
     with open("model.pkl", "wb") as f:
         pickle.dump({
             "model": model,
@@ -170,26 +171,24 @@ async def test_model(file: UploadFile):
         df[target_col] = np.random.randint(0, 2, size=len(df))
 
     df, _ = clean_data(df, encoders=encoders, fit_encoders=False)
-
-    # Drop extra columns and align
     df = df[[col for col in df.columns if col in feature_columns + [target_col]]]
     X = df[feature_columns]
     y_true = df[target_col]
 
     y_pred = model.predict(X)
-    average_type = "weighted" if len(np.unique(y_true)) > 2 else "binary"
+    avg_type = "weighted" if len(np.unique(y_true)) > 2 else "binary"
 
     return {
         "accuracy": accuracy_score(y_true, y_pred),
-        "precision": precision_score(y_true, y_pred, average=average_type, zero_division=0),
-        "recall": recall_score(y_true, y_pred, average=average_type, zero_division=0),
-        "f1_score": f1_score(y_true, y_pred, average=average_type, zero_division=0)
+        "precision": precision_score(y_true, y_pred, average=avg_type, zero_division=0),
+        "recall": recall_score(y_true, y_pred, average=avg_type, zero_division=0),
+        "f1_score": f1_score(y_true, y_pred, average=avg_type, zero_division=0)
     }
 
 # ----------------------------
-# Predict Single Employee Endpoint
+# Predict Single Employee
 # ----------------------------
-@app.post("/predict_single", summary="Predict for single employee")
+@app.post("/predict_single", summary="Predict single employee")
 async def predict_single(employee: Employee):
     try:
         with open("model.pkl", "rb") as f:
@@ -201,8 +200,6 @@ async def predict_single(employee: Employee):
         raise HTTPException(status_code=400, detail=f"Failed to load trained model: {e}")
 
     df = pd.DataFrame([employee.dict()])
-
-    # Clean & encode
     df, _ = clean_data(df, encoders=encoders, fit_encoders=False)
 
     # Ensure all features exist and order matches training
