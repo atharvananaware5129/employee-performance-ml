@@ -117,7 +117,8 @@ async function trainModel() {
     resultBox.innerText = "Training...";
 
     try{
-        const res = await fetch(BASE_URL+"/train", {method:"POST", body:formData});
+        const res = await fetch(BASE_URL+"/api/train", {method:"POST", body:formData});
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         resultBox.innerText = data.message || JSON.stringify(data);
     } catch(err){ resultBox.innerText = "Error: "+err; }
@@ -137,7 +138,8 @@ async function testModel() {
     progressContainer.innerHTML = "";
 
     try{
-        const res = await fetch(BASE_URL+"/test", {method:"POST", body:formData});
+        const res = await fetch(BASE_URL+"/api/test", {method:"POST", body:formData});
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         resultBox.innerText = "";
         ["accuracy","precision","recall","f1_score"].forEach(key=>{
@@ -174,11 +176,12 @@ async function predictSingle() {
     resultBox.innerText = "Predicting...";
 
     try{
-        const res = await fetch(BASE_URL+"/predict_single", {
+        const res = await fetch(BASE_URL+"/api/predict_single", {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body: JSON.stringify(data)
         });
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const result = await res.json();
         resultBox.innerText = "Prediction: "+result.prediction;
 
@@ -198,5 +201,3 @@ async function predictSingle() {
 
 </body>
 </html>
-
-

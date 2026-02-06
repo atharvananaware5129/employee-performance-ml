@@ -4,7 +4,7 @@ from fastapi import FastAPI, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
@@ -18,11 +18,10 @@ import os
 # ----------------------------
 app = FastAPI(
     title="Employee Performance ML API",
-    version="0.1.9",
+    version="0.1.10",
     description="Train/test ML model and predict single employee performance."
 )
 
-# Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,7 +36,6 @@ frontend_path = os.path.join(os.path.dirname(__file__), "../frontend")
 if not os.path.exists(frontend_path):
     print("Warning: Frontend folder not found. '/' route will 404.")
 else:
-    # Serve index.html at root
     @app.get("/", include_in_schema=False)
     async def root():
         return FileResponse(os.path.join(frontend_path, "index.html"))
@@ -45,7 +43,6 @@ else:
     # Serve all other frontend files (JS/CSS/images)
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
-# Serve favicon.ico if exists
 favicon_path = os.path.join(frontend_path, "favicon.ico")
 if os.path.exists(favicon_path):
     @app.get("/favicon.ico", include_in_schema=False)
@@ -53,12 +50,12 @@ if os.path.exists(favicon_path):
         return FileResponse(favicon_path)
 
 # ----------------------------
-# Global encoders storage
+# Global encoders
 # ----------------------------
 encoders = {}
 
 # ----------------------------
-# Pydantic model for single employee input
+# Employee Pydantic Model
 # ----------------------------
 class Employee(BaseModel):
     department: str
@@ -87,14 +84,12 @@ def clean_data(df: pd.DataFrame, encoders=None, fit_encoders=True):
     df = df.copy()
     encoders = encoders or {}
 
-    # Fill NaNs
     for col in df.columns:
         if df[col].dtype in [np.float64, np.int64]:
             df[col] = df[col].fillna(df[col].median())
         else:
             df[col] = df[col].fillna(df[col].mode()[0])
 
-    # Encode categorical columns
     for col in df.select_dtypes(include=['object', 'category']).columns:
         if fit_encoders:
             le = LabelEncoder()
@@ -107,9 +102,9 @@ def clean_data(df: pd.DataFrame, encoders=None, fit_encoders=True):
     return df, encoders
 
 # ----------------------------
-# Train Endpoint
+# ML Endpoints (prefixed with /api)
 # ----------------------------
-@app.post("/train", summary="Train ML Model")
+@app.post("/api/train")
 async def train_model(file: UploadFile, target_col: str = Form(None)):
     try:
         df = pd.read_csv(file.file)
@@ -123,10 +118,9 @@ async def train_model(file: UploadFile, target_col: str = Form(None)):
         if target_col not in df.columns:
             df[target_col] = np.random.randint(0, 2, size=len(df))
     elif target_col not in df.columns:
-        raise HTTPException(status_code=400, detail=f"Target column '{target_col}' not found in CSV")
+        raise HTTPException(status_code=400, detail=f"Target column '{target_col}' not found")
 
     df, global_encoders = clean_data(df, encoders=encoders, fit_encoders=True)
-
     drop_columns = ["employee_id"]
     X = df.drop(columns=[target_col] + [col for col in drop_columns if col in df.columns])
     y = df[target_col]
@@ -134,7 +128,6 @@ async def train_model(file: UploadFile, target_col: str = Form(None)):
     model = LogisticRegression(max_iter=1000)
     model.fit(X, y)
 
-    # Save model
     with open("model.pkl", "wb") as f:
         pickle.dump({
             "model": model,
@@ -145,10 +138,7 @@ async def train_model(file: UploadFile, target_col: str = Form(None)):
 
     return {"message": f"Model trained successfully with target column '{target_col}'"}
 
-# ----------------------------
-# Test Endpoint
-# ----------------------------
-@app.post("/test", summary="Test ML Model")
+@app.post("/api/test")
 async def test_model(file: UploadFile):
     try:
         df = pd.read_csv(file.file)
@@ -185,10 +175,7 @@ async def test_model(file: UploadFile):
         "f1_score": f1_score(y_true, y_pred, average=avg_type, zero_division=0)
     }
 
-# ----------------------------
-# Predict Single Employee
-# ----------------------------
-@app.post("/predict_single", summary="Predict single employee")
+@app.post("/api/predict_single")
 async def predict_single(employee: Employee):
     try:
         with open("model.pkl", "rb") as f:
@@ -201,8 +188,6 @@ async def predict_single(employee: Employee):
 
     df = pd.DataFrame([employee.dict()])
     df, _ = clean_data(df, encoders=encoders, fit_encoders=False)
-
-    # Ensure all features exist and order matches training
     for col in feature_columns:
         if col not in df.columns:
             df[col] = 0
